@@ -5,10 +5,10 @@ from torch import nn
 import torch.nn.functional as F
 
 
-
 @torch.jit.script
 def silu(x):
-  return x * torch.sigmoid(x)
+    return x * torch.sigmoid(x)
+
 
 class DiffusionEmbedding(nn.Module):
     def __init__(self, dim, proj_dim, max_steps=500):
@@ -20,6 +20,7 @@ class DiffusionEmbedding(nn.Module):
         self.projection2 = nn.Linear(proj_dim, proj_dim)
 
     def forward(self, diffusion_step):
+        diffusion_step = diffusion_step.to(dtype=torch.long)  # inference check
         x = self.embedding[diffusion_step]
         x = self.projection1(x)
         x = silu(x)
@@ -36,31 +37,34 @@ class DiffusionEmbedding(nn.Module):
 
 
 def get_timestep_embedding(timesteps, embedding_dim, max_positions=10000):
-  assert len(timesteps.shape) == 1  # and timesteps.dtype == tf.int32
-  half_dim = embedding_dim // 2
-  # magic number 10000 is from transformers
-  emb = math.log(max_positions) / (half_dim - 1)
-  # emb = math.log(2.) / (half_dim - 1)
-  emb = torch.exp(torch.arange(half_dim, dtype=torch.float32, device=timesteps.device) * -emb)
-  # emb = tf.range(num_embeddings, dtype=jnp.float32)[:, None] * emb[None, :]
-  # emb = tf.cast(timesteps, dtype=jnp.float32)[:, None] * emb[None, :]
-  emb = timesteps.float()[:, None] * emb[None, :]
-  emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1)
-  if embedding_dim % 2 == 1:  # zero pad
-    emb = F.pad(emb, (0, 1), mode='constant')
-  assert emb.shape == (timesteps.shape[0], embedding_dim)
-  return emb
+    assert len(timesteps.shape) == 1  # and timesteps.dtype == tf.int32
+    half_dim = embedding_dim // 2
+    # magic number 10000 is from transformers
+    emb = math.log(max_positions) / (half_dim - 1)
+    # emb = math.log(2.) / (half_dim - 1)
+    emb = torch.exp(torch.arange(half_dim, dtype=torch.float32,
+                    device=timesteps.device) * -emb)
+    # emb = tf.range(num_embeddings, dtype=jnp.float32)[:, None] * emb[None, :]
+    # emb = tf.cast(timesteps, dtype=jnp.float32)[:, None] * emb[None, :]
+    emb = timesteps.float()[:, None] * emb[None, :]
+    emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1)
+    if embedding_dim % 2 == 1:  # zero pad
+        emb = F.pad(emb, (0, 1), mode='constant')
+    assert emb.shape == (timesteps.shape[0], embedding_dim)
+    return emb
+
 
 class GaussianFourierProjection(nn.Module):
-  """Gaussian Fourier embeddings for noise levels."""
+    """Gaussian Fourier embeddings for noise levels."""
 
-  def __init__(self, embedding_size=256, scale=1.0):
-    super().__init__()
-    self.W = nn.Parameter(torch.randn(embedding_size) * scale, requires_grad=False)
+    def __init__(self, embedding_size=256, scale=1.0):
+        super().__init__()
+        self.W = nn.Parameter(torch.randn(embedding_size)
+                              * scale, requires_grad=False)
 
-  def forward(self, x):
-    x_proj = x[:, None] * self.W[None, :] * 2 * np.pi
-    return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+    def forward(self, x):
+        x_proj = x[:, None] * self.W[None, :] * 2 * np.pi
+        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
 
 class ResidualBlock(nn.Module):
@@ -78,13 +82,15 @@ class ResidualBlock(nn.Module):
         self.conditioner_projection = nn.Conv1d(
             1, 2 * residual_channels, 1, padding=2, padding_mode="circular"
         )
-        self.output_projection = nn.Conv1d(residual_channels, 2 * residual_channels, 1)
+        self.output_projection = nn.Conv1d(
+            residual_channels, 2 * residual_channels, 1)
 
         nn.init.kaiming_normal_(self.conditioner_projection.weight)
         nn.init.kaiming_normal_(self.output_projection.weight)
 
     def forward(self, x, conditioner, diffusion_step):
-        diffusion_step = self.diffusion_projection(diffusion_step).unsqueeze(-1)
+        diffusion_step = self.diffusion_projection(
+            diffusion_step).unsqueeze(-1)
         conditioner = self.conditioner_projection(conditioner)
 
         y = x + diffusion_step
@@ -134,7 +140,8 @@ class EpsilonTheta(nn.Module):
             1, residual_channels, 1, padding=2, padding_mode="circular"
         )
         if self.continuous:
-            self.diffusion_embedding = GaussianFourierProjection(embedding_size=int(self.residual_hidden / 2))
+            self.diffusion_embedding = GaussianFourierProjection(
+                embedding_size=int(self.residual_hidden / 2))
         else:
             # pass
             self.diffusion_embedding = DiffusionEmbedding(
@@ -153,7 +160,8 @@ class EpsilonTheta(nn.Module):
                 for i in range(residual_layers)
             ]
         )
-        self.skip_projection = nn.Conv1d(residual_channels, residual_channels, 3)
+        self.skip_projection = nn.Conv1d(
+            residual_channels, residual_channels, 3)
         self.output_projection = nn.Conv1d(residual_channels, 1, 3)
 
         nn.init.kaiming_normal_(self.input_projection.weight)
@@ -175,7 +183,8 @@ class EpsilonTheta(nn.Module):
             x, skip_connection = layer(x, cond_up, diffusion_step)
             skip.append(skip_connection)
 
-        x = torch.sum(torch.stack(skip), dim=0) / math.sqrt(len(self.residual_layers))
+        x = torch.sum(torch.stack(skip), dim=0) / \
+            math.sqrt(len(self.residual_layers))
         x = self.skip_projection(x)
         x = F.leaky_relu(x, 0.4)
         x = self.output_projection(x)

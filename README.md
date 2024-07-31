@@ -10,6 +10,16 @@ See requirements
 
 > ScoreGrad is based on [GluonTS](https://github.com/awslabs/gluon-ts) and [PytorchTS](https://github.com/zalandoresearch/pytorch-ts)
 
+## install
+
+select a version of cuda and use : 
+```commandline
+pip install torch==1.8.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
+
+pip install torch==1.13.0+cu117 -f https://download.pytorch.org/whl/torch_stable.html
+```
+to install torch.
+
 ### Load datasets
 
 ```python

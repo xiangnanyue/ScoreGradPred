@@ -36,12 +36,14 @@ def plot(target, forecast, prediction_length, prediction_intervals=(50.0, 90.0),
 
         target[-2 * prediction_length:][dim].plot(ax=ax)
 
-        ps_data = [forecast.quantile(p / 100.0)[:, dim] for p in percentiles_sorted]
+        ps_data = [forecast.quantile(p / 100.0)[:, dim]
+                   for p in percentiles_sorted]
         i_p50 = len(percentiles_sorted) // 2
 
         p50_data = ps_data[i_p50]
         p50_series = pd.Series(data=p50_data, index=forecast.index)
-        p50_series.plot(color=color, ls="-", label=f"{label_prefix}median", ax=ax)
+        p50_series.plot(color=color, ls="-",
+                        label=f"{label_prefix}median", ax=ax)
 
         for i in range(len(percentiles_sorted) // 2):
             ptile = percentiles_sorted[i]
@@ -64,7 +66,8 @@ def plot(target, forecast, prediction_length, prediction_intervals=(50.0, 90.0),
                 ax=ax,
             )
 
-    legend = ["observations", "median prediction"] + [f"{k}% prediction interval" for k in prediction_intervals][::-1]
+    legend = ["observations", "median prediction"] + \
+        [f"{k}% prediction interval" for k in prediction_intervals][::-1]
     axx[0].legend(legend, loc="upper left")
 
     if fname is not None:
@@ -74,11 +77,15 @@ def plot(target, forecast, prediction_length, prediction_intervals=(50.0, 90.0),
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(f"Available datasets: {list(dataset_recipes.keys())}")
 
-dataset = get_dataset("electricity_nips", regenerate=False)
+try:
+    dataset = get_dataset("electricity_nips", regenerate=False)
+except Exception as e:
+    print(e)
+    dataset = get_dataset("electricity_nips", regenerate=True)
 # print(dataset.metadata)
 
-
-train_grouper = MultivariateGrouper(max_target_dim=min(2000, int(dataset.metadata.feat_static_cat[0].cardinality)))
+train_grouper = MultivariateGrouper(max_target_dim=min(
+    2000, int(dataset.metadata.feat_static_cat[0].cardinality)))
 
 test_grouper = MultivariateGrouper(num_test_dates=int(len(dataset.test)/len(dataset.train)),
                                    max_target_dim=min(2000, int(dataset.metadata.feat_static_cat[0].cardinality)))
@@ -133,8 +140,8 @@ else:
     trainnet = estimator.create_training_network(config.device)
     trainnet.load_state_dict(torch.load(config.path))
     transformation = estimator.create_transformation()
-    predictor = estimator.create_predictor(transformation, trainnet, config.device)
-
+    predictor = estimator.create_predictor(
+        transformation, trainnet, config.device)
 
 
 forecast_it, ts_it = make_evaluation_predictions(dataset=dataset_test,
@@ -152,11 +159,11 @@ plot(
 )
 
 
-
 evaluator = MultivariateEvaluator(quantiles=(np.arange(20)/20.0)[1:],
                                   target_agg_funcs={'sum': np.sum})
 
-agg_metric, item_metrics = evaluator(targets, forecasts, num_series=len(dataset_test))
+agg_metric, item_metrics = evaluator(
+    targets, forecasts, num_series=len(dataset_test))
 
 print("CRPS:", agg_metric["mean_wQuantileLoss"])
 print("ND:", agg_metric["ND"])
@@ -173,6 +180,9 @@ metrics = {
     "ND-Sum:": agg_metric["m_sum_ND"],
     "NRMSE-Sum:": agg_metric["m_sum_NRMSE"],
 }
+
 if config.save and config.train:
+    os.makedirs('./model', exist_ok=True)  # check dir exists
     torch.save(train_output.trained_net.state_dict(), config.path[:-4] + str(metrics['CRPS-Sum:']) + config.path[-4:])
+
 write_to_file(args, config, metrics, args.path)
