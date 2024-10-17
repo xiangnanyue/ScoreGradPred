@@ -109,8 +109,14 @@ agg_metric, item_metrics = evaluator(targets, forecasts, num_series=len(dataset_
 ## Evaluation on `Electricity`
 
 ```bash
+# 自己配置好的环境
+conda activate pred_ts
+
+# 训练和评估
 python run_elec.py --data elec --name ddpm_c --beta1 0.01 --beta2 15 --scale 200 --epochs 40 --batch 64
+
 ```
+
 ## Fast sampling option
 * We add a conditional ODE sampler for acceleration of the prediction process. It takes only around 20 steps for sampling and it can increase the prediciton speed by up to 4.9 times without performance degradation.
 <img src="./assets/scale.jpg" alt="performance with diffusion steps" width="400px" />
