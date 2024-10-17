@@ -26,7 +26,7 @@ def get_elec_ddpm_cont_config():
     training.continuous = True
     training.seed = 123
 
-    config.train = False #True
+    config.train = True
     config.save = True
     config.path = './model/elec_ddpm_cont.pkl'
 
